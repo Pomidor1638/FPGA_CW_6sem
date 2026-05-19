@@ -25,6 +25,7 @@ module CW_CPU_CORE
     // System signals
     input  wire        CLK,
     input  wire        RST,
+    input  wire        CE,
 
     // STI 1.0 program memory port, 32-bit data bus
     output wire        PGM_S_EX_REQ,
@@ -309,6 +310,7 @@ module CW_CPU_CORE
     //--------------------------------------------------------------------------
     CW_CTRL_FSM u_ctrl_fsm (
         .CLK          (CLK),
+        .CE           (CE),
         .RST          (RST),
         .STAGES       (stages),
         .PGMA         (pgma),
