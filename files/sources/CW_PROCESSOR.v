@@ -58,6 +58,26 @@ module CW_PROCESSOR (
 
     assign RES_DATA_T = {CMD, ADDR, DATA};
 
+    initial begin
+        state        = ST_IDLE;
+        CMD_RDY_R    = 1'b1;
+        RES_RDY_T    = 1'b0;
+        CEO          = 1'b0;
+        RSTO         = 1'b0;
+        PGM_S_EX_REQ = 1'b0;
+        PGM_S_ADDR   = 16'd0;
+        PGM_S_NBE    = 4'b0000;
+        PGM_S_CMD    = 3'b000;
+        PGM_S_D_WR   = 32'd0;
+        DM_S_EX_REQ  = 1'b0;
+        DM_S_ADDR    = 16'd0;
+        DM_S_CMD     = 3'b000;
+        DM_S_D_WR    = 8'd0;
+        CMD          = 4'd0;
+        ADDR         = 16'd0;
+        DATA         = 32'd0;
+    end
+
     always @(posedge CLK or posedge RST) begin
         if (RST) begin
             state        <= ST_IDLE;
