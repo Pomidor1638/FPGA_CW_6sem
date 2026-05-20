@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module CW_ASSAMBLER (
+module CW_ASSEMBLER (
     input  wire        CLK,
     input  wire        RST,
     
