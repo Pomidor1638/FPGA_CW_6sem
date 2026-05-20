@@ -4,23 +4,19 @@ module CW_ASSAMBLER (
     input  wire        CLK,
     input  wire        RST,
     
-    // Порт DRP ODPS (от UART)
     input  wire        RX_RDY_T,
     input  wire  [7:0] RX_DATA_R,
     output reg         RX_RDY_R,
     
-    // Порт DTP ODPS (к Процессору отладчика)
     output reg         CMD_RDY_T,
     output wire [51:0] CMD_DATA_T,
     input  wire        CMD_RDY_R,
     
-    // Сигналы дешифратора ASCII -> HEX
     output wire  [7:0] ASCII_DATA,
     input  wire        HEX_FLG,
     input  wire  [3:0] DC_ASCII_HEX
 );
 
-    // Коды команд (из таблицы на стр. 8)
     localparam CMD_RESET = 4'b0000;
     localparam CMD_RUN   = 4'b0001;
     localparam CMD_STEP  = 4'b0010;
@@ -31,12 +27,10 @@ module CW_ASSAMBLER (
     localparam CMD_PRD   = 4'b0111;
     localparam CMD_ERR   = 4'b1111;
 
-    // ASCII константы
     localparam CHAR_SPACE = 8'h20;
     localparam CHAR_CR    = 8'h0D;
     localparam CHAR_LF    = 8'h0A;
 
-    // Кодировка состояний (Огромный конечный автомат парсера)
     localparam ST_IDLE  = 0,
                ST_R1    = 1,  ST_U    = 2,  ST_N    = 3, 
                ST_E1    = 4,  ST_S2   = 5,  ST_E2   = 6,  ST_T1   = 7,
@@ -52,14 +46,11 @@ module CW_ASSAMBLER (
     reg [2:0]  DATA_CT;
     reg        OPR2_FLG;
 
-    // Связь комбинационной части (стр. 18-19)
     assign ASCII_DATA = RX_DATA_R;
     assign CMD_DATA_T = {CMD, ADDR, DATA};
 
     wire [2:0] END_CT;
-    // Логика END_CT по схеме на стр. 19:
-    // Если OPR2_FLG == 0 (принимаем адрес), всегда 4 полубайта (3'h3).
-    // Если OPR2_FLG == 1 (принимаем данные), смотрим на CMD[1].
+
     assign END_CT = (~OPR2_FLG) ? 3'h3 : (CMD[1] ? 3'h7 : 3'h1);
 
     always @(posedge CLK or posedge RST) begin
@@ -94,7 +85,6 @@ module CW_ASSAMBLER (
                     end
                 end
 
-                // --- ВЕТКА 'R' (RUN / RESET) ---
                 ST_R1: begin
                     if (RX_RDY_T) begin
                         if (RX_DATA_R == "U") state <= ST_U;
@@ -139,7 +129,6 @@ module CW_ASSAMBLER (
                     end
                 end
 
-                // --- ВЕТКА 'S' (STOP / STEP) ---
                 ST_S1: begin
                     if (RX_RDY_T) begin
                         if (RX_DATA_R == "T") state <= ST_T2;
@@ -178,7 +167,6 @@ module CW_ASSAMBLER (
                     end
                 end
 
-                // --- ВЕТКА 'P' (PWR / PRD) ---
                 ST_P1: begin
                     if (RX_RDY_T) begin
                         if (RX_DATA_R == "W") state <= ST_W1;
@@ -211,7 +199,6 @@ module CW_ASSAMBLER (
                     end
                 end
 
-                // --- ВЕТКА 'M' (MWR / MRD - Восстановлена по аналогии с P) ---
                 ST_M: begin
                     if (RX_RDY_T) begin
                         if (RX_DATA_R == "W") state <= ST_MW1;
@@ -244,17 +231,14 @@ module CW_ASSAMBLER (
                     end
                 end
 
-                // --- ПРИЕМ ДАННЫХ ---
                 ST_ROPR: begin
                     if (RX_RDY_T) begin
                         if (HEX_FLG) begin
-                            // Запись полубайта в нужный регистр
                             if (OPR2_FLG) 
                                 DATA <= {DATA[27:0], DC_ASCII_HEX};
                             else 
-                                ADDR <= {ADDR[11:0], DC_ASCII_HEX}; // ИСПРАВЛЕНА ОШИБКА ИЗ МЕТОДИЧКИ
+                                ADDR <= {ADDR[11:0], DC_ASCII_HEX};
 
-                            // Логика счетчика
                             if (DATA_CT == END_CT) begin
                                 DATA_CT <= 3'b000;
                                 OPR2_FLG <= OPR2_FLG | (CMD == CMD_PRD) | (CMD == CMD_MRD);
@@ -292,7 +276,6 @@ module CW_ASSAMBLER (
                     end
                 end
 
-                // --- ПЕРЕДАЧА РЕЗУЛЬТАТА ---
                 ST_TRANS: begin
                     if (CMD_RDY_R) begin
                         CMD_RDY_T <= 1'b0;
