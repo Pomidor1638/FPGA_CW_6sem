@@ -37,7 +37,7 @@ module CW_DEBUGGER (
     output wire        RSTO,
     
     output wire        PGM_S_EX_REQ,
-    output wire [15:0] PGM_S_ADDR,
+    output wire [17:2] PGM_S_ADDR,
     output wire [3:0]  PGM_S_NBE,
     output wire [2:0]  PGM_S_CMD,
     output wire [31:0] PGM_S_D_WR,
