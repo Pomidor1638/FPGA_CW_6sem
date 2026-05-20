@@ -22,6 +22,7 @@
 module CW_CTRL_FSM (
     input  wire        CLK,
     input  wire        RST,
+    input  wire        CE,
 
     output wire [ 3:0] STAGES,
     input  wire [17:2] PGMA,
@@ -94,9 +95,11 @@ module CW_CTRL_FSM (
         end else begin
             case (FSM_STATE)
                 PGMI: begin
-                    PGM_S_EX_REQ <= 1'b1;
-                    PGM_S_ADDR   <= PGMA;
-                    FSM_STATE <= PGMW;
+                    if (CE) begin
+                        PGM_S_EX_REQ <= 1'b1;
+                        PGM_S_ADDR   <= PGMA;
+                        FSM_STATE <= PGMW;
+                    end
                 end
 
                 PGMW: begin
