@@ -18,7 +18,7 @@ module CW_PROCESSOR (
     output reg         RSTO,
     
     output reg         PGM_S_EX_REQ,
-    output reg  [15:0] PGM_S_ADDR,
+    output reg  [17:2] PGM_S_ADDR,
     output reg  [3:0]  PGM_S_NBE,
     output reg  [2:0]  PGM_S_CMD,
     output reg  [31:0] PGM_S_D_WR,
