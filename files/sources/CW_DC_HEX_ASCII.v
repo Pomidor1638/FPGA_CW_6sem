@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
-// Engineer: 
+// Engineer: Semenikhin A.V.
 // 
 // Create Date: 20.02.2026 21:00:36
 // Design Name: 
