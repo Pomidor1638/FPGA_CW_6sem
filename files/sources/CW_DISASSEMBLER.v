@@ -49,8 +49,23 @@ module CW_DISASSEMBLER (
     // (p. 30)
     wire [3:0] dec_cmd = (state == ST_IDLE) ? RES_DATA_R[51:48] : CMD;
     reg  [4:0] ADDR_MX, END_ADDR_MX;
+
+    initial begin
+        state     = ST_IDLE;
+        TX_RDY_T  = 1'b0;
+        TX_DATA_T = 8'h00;
+        RES_RDY_R = 1'b1;
+        RES_CT    = 3'b000;
+        ADDR      = 5'd0;
+        END_ADDR  = 5'd0;
+        CMD       = 4'd0;
+        RES_ADDR  = 16'd0;
+        RES_DATA  = 32'd0;
+        RES_FLG   = 1'b0;
+        OPR2_FLG  = 1'b0;
+    end
     
-    always @(*) begin
+   always @(*) begin
         case(dec_cmd)
             4'h0: begin ADDR_MX = 5'h00; END_ADDR_MX = 5'h04; end // RESET
             4'h1: begin ADDR_MX = 5'h05; END_ADDR_MX = 5'h07; end // RUN
@@ -60,7 +75,8 @@ module CW_DISASSEMBLER (
             4'h5: begin ADDR_MX = 5'h13; END_ADDR_MX = 5'h15; end // MRD
             4'h6: begin ADDR_MX = 5'h16; END_ADDR_MX = 5'h18; end // PWR
             4'h7: begin ADDR_MX = 5'h19; END_ADDR_MX = 5'h1B; end // PRD
-            default: begin ADDR_MX = 5'h1C; END_ADDR_MX = 5'h1E; end // ERR
+            4'hF: begin ADDR_MX = 5'h1C; END_ADDR_MX = 5'h1E; end // ERR
+            default: begin ADDR_MX = 5'h00; END_ADDR_MX = 5'h00; end 
         endcase
     end
 
@@ -155,6 +171,7 @@ module CW_DISASSEMBLER (
 
                 ST_TSP: begin
                     if (TX_RDY_R) begin
+                        RES_FLG   <= 1'b0;
                         TX_DATA_T <= DC_ASCII_DATA;
                         RES_CT    <= RES_CT + 1'b1;
                         state     <= ST_TDT;
