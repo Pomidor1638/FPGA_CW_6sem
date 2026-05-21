@@ -20,12 +20,18 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module CW_TOP
+module CW_TOP #(
+    parameter BOOT_RUN = 1'b0
+)
 (
     // System signals
     input wire CLK_48,
     input wire SYS_NRST,
     output wire N_ST,
+
+    // UART signals
+    input wire UART_RXD,
+    output wire UART_TXD,
     
     // RGB-matrix signals
     output wire [7:0] COL_R_,
@@ -165,11 +171,18 @@ module CW_TOP
     // Interrupt interface
     wire [15:0] IADDR = 16'h0000;
     wire        IRQ;
+
+    // Debugger processor control
+    wire        DBG_CEO;
+    wire        DBG_RSTO;
+    wire        CPU_CE  = BOOT_RUN | DBG_CEO;
+    wire        CPU_RST = RST | DBG_RSTO;
     
     CW_CPU_CORE cw_cpu_core
     (
         .CLK(CLK_48),
-        .RST(RST),
+        .RST(CPU_RST),
+        .CE(CPU_CE),
 
         .PGM_S_EX_REQ(PGM_S_EX_REQ),
         .PGM_S_ADDR(PGM_S_ADDR),
@@ -197,14 +210,168 @@ module CW_TOP
         .IRQ(IRQ)
     );
     
-    //----------------> Program ROM
-    CW_PRG_ROM_32B cw_prg_rom_32b
-    (
-        .S_EX_REQ(PGM_S_EX_REQ),
-        .S_ADDR(PGM_S_ADDR[11:2]),
-        .S_CMD(PGM_S_CMD),
-        .S_EX_ACK(PGM_S_EX_ACK),
-        .S_D_RD(PGM_S_D_RD)
+    //----------------> UART and debugger
+    wire        UART_RX_RDY_T;
+    wire [9:0]  UART_RX_DATA_T;
+    wire        DBG_RX_RDY_R;
+    wire        DBG_TX_RDY_T;
+    wire [7:0]  DBG_TX_DATA_T;
+    wire        DBG_TX_RDY_R;
+
+    wire        DBG_PGM_S_EX_REQ;
+    wire [17:2] DBG_PGM_S_ADDR;
+    wire [ 3:0] DBG_PGM_S_NBE;
+    wire [ 2:0] DBG_PGM_S_CMD;
+    wire [31:0] DBG_PGM_S_D_WR;
+    wire        DBG_PGM_S_EX_ACK;
+    wire [31:0] DBG_PGM_S_D_RD;
+
+    wire        DBG_DM_S_EX_REQ;
+    wire [15:0] DBG_DM_S_ADDR;
+    wire [ 2:0] DBG_DM_S_CMD;
+    wire [ 7:0] DBG_DM_S_D_WR;
+    wire        DBG_DM_S_EX_ACK;
+    wire [ 7:0] DBG_DM_S_D_RD;
+
+    CW_UART #(
+        .CLK_FREQ  (48_000_000),
+        .BAUD_RATE (9600),
+        .RATIO     (8)
+    ) cw_uart (
+        .CLK        (CLK_48),
+        .RST        (RST),
+        .RXD        (UART_RXD),
+        .TX_RDY_T   (DBG_TX_RDY_T),
+        .TX_DATA_R  (DBG_TX_DATA_T),
+        .TX_RDY_R   (DBG_TX_RDY_R),
+        .TXD        (UART_TXD),
+        .RX_DATA_EN (UART_RX_RDY_T),
+        .RX_DATA_T  (UART_RX_DATA_T)
+    );
+
+    CW_DEBUGGER cw_debugger (
+        .CLK          (CLK_48),
+        .RST          (RST),
+
+        .RX_RDY_T     (UART_RX_RDY_T & ~(|UART_RX_DATA_T[9:8])),
+        .RX_DATA_R    (UART_RX_DATA_T[7:0]),
+        .RX_RDY_R     (DBG_RX_RDY_R),
+
+        .TX_RDY_T     (DBG_TX_RDY_T),
+        .TX_DATA_T    (DBG_TX_DATA_T),
+        .TX_RDY_R     (DBG_TX_RDY_R),
+
+        .CEO          (DBG_CEO),
+        .RSTO         (DBG_RSTO),
+
+        .PGM_S_EX_REQ (DBG_PGM_S_EX_REQ),
+        .PGM_S_ADDR   (DBG_PGM_S_ADDR),
+        .PGM_S_NBE    (DBG_PGM_S_NBE),
+        .PGM_S_CMD    (DBG_PGM_S_CMD),
+        .PGM_S_D_WR   (DBG_PGM_S_D_WR),
+        .PGM_S_EX_ACK (DBG_PGM_S_EX_ACK),
+        .PGM_S_D_RD   (DBG_PGM_S_D_RD),
+
+        .DM_S_EX_REQ  (DBG_DM_S_EX_REQ),
+        .DM_S_ADDR    (DBG_DM_S_ADDR),
+        .DM_S_CMD     (DBG_DM_S_CMD),
+        .DM_S_D_WR    (DBG_DM_S_D_WR),
+        .DM_S_EX_ACK  (DBG_DM_S_EX_ACK),
+        .DM_S_D_RD    (DBG_DM_S_D_RD)
+    );
+
+    //----------------> Program memory ODPS switch
+    wire        PGM_MEM_S_EX_REQ;
+    wire [17:2] PGM_MEM_S_ADDR;
+    wire [ 2:0] PGM_MEM_S_CMD;
+    wire [31:0] PGM_MEM_S_D_WR;
+    wire        PGM_MEM_S_EX_ACK;
+    wire [31:0] PGM_MEM_S_D_RD;
+
+    wire [50:0] CPU_PGM_DATA_T = {PGM_S_CMD, PGM_S_ADDR, PGM_S_D_WR};
+    wire [50:0] DBG_PGM_DATA_T = {DBG_PGM_S_CMD, DBG_PGM_S_ADDR, DBG_PGM_S_D_WR};
+    wire [50:0] PGM_MEM_DATA_T;
+    wire        PGM_MEM_LAST_TR;
+
+    assign {PGM_MEM_S_CMD, PGM_MEM_S_ADDR, PGM_MEM_S_D_WR} = PGM_MEM_DATA_T;
+
+    M_ODPS_SWITCH_M0_2T1I_V10 #(
+        .DATA_T_WIDTH (51),
+        .DATA_R_WIDTH (32)
+    ) cw_pgm_odps_switch (
+        .CLK        (CLK_48),
+        .RST        (RST),
+
+        .T0_READY_T (PGM_S_EX_REQ),
+        .T0_LAST_TR (1'b1),
+        .T0_DATA_T  (CPU_PGM_DATA_T),
+        .T0_READY_R (PGM_S_EX_ACK),
+        .T0_DATA_R  (PGM_S_D_RD),
+
+        .T1_READY_T (DBG_PGM_S_EX_REQ),
+        .T1_LAST_TR (1'b1),
+        .T1_DATA_T  (DBG_PGM_DATA_T),
+        .T1_READY_R (DBG_PGM_S_EX_ACK),
+        .T1_DATA_R  (DBG_PGM_S_D_RD),
+
+        .I0_READY_T (PGM_MEM_S_EX_REQ),
+        .I0_LAST_TR (PGM_MEM_LAST_TR),
+        .I0_DATA_T  (PGM_MEM_DATA_T),
+        .I0_READY_R (PGM_MEM_S_EX_ACK),
+        .I0_DATA_R  (PGM_MEM_S_D_RD)
+    );
+
+    //----------------> Program RAM
+    CW_PRG_RAM_32B cw_prg_ram_32b (
+        .CLK      (CLK_48),
+        .RST      (RST),
+        .S_EX_REQ (PGM_MEM_S_EX_REQ),
+        .S_ADDR   (PGM_MEM_S_ADDR[11:2]),
+        .S_CMD    (PGM_MEM_S_CMD),
+        .S_D_WR   (PGM_MEM_S_D_WR),
+        .S_EX_ACK (PGM_MEM_S_EX_ACK),
+        .S_D_RD   (PGM_MEM_S_D_RD)
+    );
+
+    //----------------> Data memory ODPS switch
+    wire        DM_SYS_S_EX_REQ;
+    wire [15:0] DM_SYS_S_ADDR;
+    wire [ 2:0] DM_SYS_S_CMD;
+    wire [ 7:0] DM_SYS_S_D_WR;
+    wire        DM_SYS_S_EX_ACK;
+    wire [ 7:0] DM_SYS_S_D_RD;
+
+    wire [26:0] CPU_DM_DATA_T = {DM_S_CMD, DM_S_ADDR, DM_S_D_WR};
+    wire [26:0] DBG_DM_DATA_T = {DBG_DM_S_CMD, DBG_DM_S_ADDR, DBG_DM_S_D_WR};
+    wire [26:0] DM_SYS_DATA_T;
+    wire        DM_SYS_LAST_TR;
+
+    assign {DM_SYS_S_CMD, DM_SYS_S_ADDR, DM_SYS_S_D_WR} = DM_SYS_DATA_T;
+
+    M_ODPS_SWITCH_M0_2T1I_V10 #(
+        .DATA_T_WIDTH (27),
+        .DATA_R_WIDTH (8)
+    ) cw_dm_odps_switch (
+        .CLK        (CLK_48),
+        .RST        (RST),
+
+        .T0_READY_T (DM_S_EX_REQ),
+        .T0_LAST_TR (1'b1),
+        .T0_DATA_T  (CPU_DM_DATA_T),
+        .T0_READY_R (DM_S_EX_ACK),
+        .T0_DATA_R  (DM_S_D_RD),
+
+        .T1_READY_T (DBG_DM_S_EX_REQ),
+        .T1_LAST_TR (1'b1),
+        .T1_DATA_T  (DBG_DM_DATA_T),
+        .T1_READY_R (DBG_DM_S_EX_ACK),
+        .T1_DATA_R  (DBG_DM_S_D_RD),
+
+        .I0_READY_T (DM_SYS_S_EX_REQ),
+        .I0_LAST_TR (DM_SYS_LAST_TR),
+        .I0_DATA_T  (DM_SYS_DATA_T),
+        .I0_READY_R (DM_SYS_S_EX_ACK),
+        .I0_DATA_R  (DM_SYS_S_D_RD)
     );
     
     //----------------> System bus STI 1.0
@@ -266,12 +433,12 @@ module CW_TOP
     
     CW_SYS_INFS8B cw_sys_infs8b
     (
-        .T_S_EX_REQ(DM_S_EX_REQ),
-        .T_S_ADDR(DM_S_ADDR),
-        .T_S_CMD(DM_S_CMD),
-        .T_S_D_WR(DM_S_D_WR),
-        .T_S_EX_ACK(DM_S_EX_ACK),
-        .T_S_D_RD(DM_S_D_RD),
+        .T_S_EX_REQ(DM_SYS_S_EX_REQ),
+        .T_S_ADDR(DM_SYS_S_ADDR),
+        .T_S_CMD(DM_SYS_S_CMD),
+        .T_S_D_WR(DM_SYS_S_D_WR),
+        .T_S_EX_ACK(DM_SYS_S_EX_ACK),
+        .T_S_D_RD(DM_SYS_S_D_RD),
         
         .I0_S_EX_ACK(PROC_S_EX_ACK),
         .I0_S_D_RD(PROC_S_D_RD),
