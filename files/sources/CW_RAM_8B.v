@@ -37,7 +37,8 @@ assign WE = S_EX_REQ & ~S_CMD[2];
 
 genvar i;
 generate
-    for(i = 0; i < 8; i = i + 1) begin: generate_spram
+    for(i = 0; i < 8; i = i + 1)
+    begin: generate_spram
         wire [7:0] MEMORY;
     
         CW_SPRAM_UADW #(
