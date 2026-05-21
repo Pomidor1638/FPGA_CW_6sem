@@ -11,8 +11,10 @@ module CW_TOP_TB;
 
     reg CLK_48;
     reg SYS_NRST;
+    reg UART_RXD;
 
     wire N_ST;
+    wire UART_TXD;
     wire [7:0] COL_R_;
     wire [7:0] COL_G_;
     wire [7:0] COL_B_;
@@ -58,10 +60,14 @@ module CW_TOP_TB;
         #(PERIOD_CLK / 2.0);
     end
 
-    CW_TOP dut (
+    CW_TOP #(
+        .BOOT_RUN(1'b1)
+    ) dut (
         .CLK_48  (CLK_48),
         .SYS_NRST(SYS_NRST),
         .N_ST    (N_ST),
+        .UART_RXD(UART_RXD),
+        .UART_TXD(UART_TXD),
 
         .COL_R_(COL_R_),
         .COL_G_(COL_G_),
@@ -115,14 +121,21 @@ module CW_TOP_TB;
     defparam dut.cw_divider.MOD = 4;
     defparam dut.cw_divider_cascade.MOD = 2;
 
+    function [7:0] swap_nibbles;
+        input [7:0] value;
+        begin
+            swap_nibbles = {value[3:0], value[7:4]};
+        end
+    endfunction
+
     function [7:0] seg_byte;
         input integer idx;
         begin
             case (idx)
-                0: seg_byte = dut.cw_7seg_cntrl.HEX_IN[31:24];
-                1: seg_byte = dut.cw_7seg_cntrl.HEX_IN[23:16];
-                2: seg_byte = dut.cw_7seg_cntrl.HEX_IN[15:8];
-                3: seg_byte = dut.cw_7seg_cntrl.HEX_IN[7:0];
+                0: seg_byte = swap_nibbles(dut.cw_7seg_cntrl.HEX_IN[7:0]);
+                1: seg_byte = swap_nibbles(dut.cw_7seg_cntrl.HEX_IN[15:8]);
+                2: seg_byte = swap_nibbles(dut.cw_7seg_cntrl.HEX_IN[23:16]);
+                3: seg_byte = swap_nibbles(dut.cw_7seg_cntrl.HEX_IN[31:24]);
                 default: seg_byte = 8'hxx;
             endcase
         end
@@ -277,6 +290,7 @@ module CW_TOP_TB;
         CHECKS = 0;
         ERRORS = 0;
         SYS_NRST = 1'b0;
+        UART_RXD = 1'b1;
         SW_A_VALUE = 8'h00;
         SW_B_VALUE = 8'h00;
         BTN_0 = 1'b0;
